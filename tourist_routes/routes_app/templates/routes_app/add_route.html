@@ -1,0 +1,45 @@
+{% extends 'routes_app/base.html' %}
+
+{% block content %}
+<h1>Добавление нового туристического маршрута</h1>
+
+<form method="post">
+    {% csrf_token %}
+    
+    {% for field in model_fields %}
+    <div>
+        <label for="{{ field.name }}">
+            {{ field.verbose_name }}{% if field.required %}*{% endif %}:
+        </label>
+        
+        {% if field.choices %}
+        {# Поле с выбором из списка #}
+        <select id="{{ field.name }}" name="{{ field.name }}" {% if field.required %}required{% endif %}>
+            <option value="">-- Выберите --</option>
+            {% for value, label in field.choices %}
+            <option value="{{ value }}" {% if form_data.field.name == value %}selected{% endif %}>
+                {{ label }}
+            </option>
+            {% endfor %}
+        </select>
+        
+        {% elif field.type == 'TextField' %}
+        {# Большое текстовое поле #}
+        <textarea id="{{ field.name }}" name="{{ field.name }}" rows="4" 
+                  {% if field.required %}required{% endif %}>{{ form_data.field.name|default:'' }}</textarea>
+        
+        {% else %}
+        {# Стандартное текстовое поле #}
+        <input type="text" id="{{ field.name }}" name="{{ field.name }}" 
+               value="{{ form_data.field.name|default:'' }}" 
+               {% if field.required %}required{% endif %}
+               {% if field.max_length %}maxlength="{{ field.max_length }}"{% endif %}>
+        {% endif %}
+    </div>
+    {% endfor %}
+    
+    <button type="submit">Сохранить маршрут</button>
+</form>
+
+<p><small>* - обязательные поля</small></p>
+{% endblock %}

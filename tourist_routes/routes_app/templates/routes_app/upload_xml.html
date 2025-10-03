@@ -1,0 +1,54 @@
+{% extends 'routes_app/base.html' %}
+
+{% block content %}
+<h1>Загрузка XML файла с маршрутами</h1>
+<p>Загруженный XML файл заменит текущие данные</p>
+
+<form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    
+    <div>
+        <label for="xml_file">Выберите XML файл:</label>
+        <input type="file" id="xml_file" name="xml_file" accept=".xml" required>
+    </div>
+    
+    <button type="submit">Загрузить и заменить данные</button>
+</form>
+
+<h3>Поддерживаемые структуры XML:</h3>
+
+<div style="display: flex; gap: 20px; flex-wrap: wrap;">
+    <div style="flex: 1; min-width: 300px;">
+        <h4>Стандартная структура:</h4>
+        <pre>
+&lt;tourist_routes&gt;
+    &lt;route&gt;
+        &lt;name&gt;Название&lt;/name&gt;
+        &lt;description&gt;Описание&lt;/description&gt;
+        &lt;length_km&gt;42.5&lt;/length_km&gt;
+        &lt;duration_days&gt;7&lt;/duration_days&gt;
+        &lt;difficulty&gt;сложный&lt;/difficulty&gt;
+        &lt;region&gt;Регион&lt;/region&gt;
+        &lt;best_season&gt;июль-август&lt;/best_season&gt;
+    &lt;/route&gt;
+&lt;/tourist_routes&gt;
+        </pre>
+    </div>
+    
+    <div style="flex: 1; min-width: 300px;">
+        <h4>Альтернативная структура:</h4>
+        <pre>
+&lt;routes&gt;
+    &lt;tourist_route&gt;
+        &lt;title&gt;Название&lt;/title&gt;
+        &lt;desc&gt;Описание&lt;/desc&gt;
+        &lt;distance&gt;42.5&lt;/distance&gt;
+        &lt;days&gt;7&lt;/days&gt;
+        &lt;complexity&gt;сложный&lt;/complexity&gt;
+        &lt;location&gt;Регион&lt;/location&gt;
+    &lt;/tourist_route&gt;
+&lt;/routes&gt;
+        </pre>
+    </div>
+</div>
+{% endblock %}
