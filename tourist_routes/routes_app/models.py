@@ -15,6 +15,6 @@ class TouristRoute(models.Model):
     region = models.CharField(max_length=100, verbose_name="Регион")
     best_season = models.CharField(max_length=100, verbose_name="Лучшее время для похода", blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
-    
+    kolvo_chel = models.DecimalField(max_digits=6, decimal_places=2,verbose_name="Количество человек", blank=True, null=True)
     def __str__(self):
         return self.name

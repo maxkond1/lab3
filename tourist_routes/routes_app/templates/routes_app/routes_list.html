@@ -14,7 +14,7 @@
             <th>Сложность</th>
             <th>Лучшее время</th>
             <th>Дата создания</th>
-            <th>Действия</th>
+            <th>Кол-во человек</th>
         </tr>
     </thead>
     <tbody>
@@ -27,6 +27,7 @@
             <td>{{ route.get_difficulty_display }}</td>
             <td>{{ route.best_season }}</td>
             <td>{{ route.created_at|date:"d.m.Y H:i" }}</td>
+            <td>{{ route.kolvo_chel }}</td>
             <td>
                 <a href="{% url 'delete_route' route.id %}" 
                    onclick="return confirm('Удалить маршрут \"{{ route.name }}\"?')">Удалить</a>

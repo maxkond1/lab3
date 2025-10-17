@@ -82,7 +82,7 @@ def auto_validate_route_data(data):
     return errors
 
 def auto_create_route(data):
-    """Автоматическое создание объекта маршрута"""
+    """Автоматическое создание объекта маршрута с обработкой отсутствующих полей"""
     fields = get_model_fields()
     route_data = {}
     
@@ -91,13 +91,30 @@ def auto_create_route(data):
         value = data.get(field_name, '')
         
         if value:
-            # Преобразование типов
+            try:
+                # Преобразование типов
+                if field['type'] in ['DecimalField']:
+                    route_data[field_name] = float(value)
+                elif field['type'] in ['PositiveIntegerField', 'IntegerField']:
+                    route_data[field_name] = int(value)
+                else:
+                    route_data[field_name] = value
+            except (ValueError, TypeError):
+                # Если преобразование не удалось, используем значения по умолчанию
+                if field['type'] in ['DecimalField']:
+                    route_data[field_name] = 0.0
+                elif field['type'] in ['PositiveIntegerField', 'IntegerField']:
+                    route_data[field_name] = 0
+                else:
+                    route_data[field_name] = ''
+        else:
+            # Устанавливаем значения по умолчанию для пустых полей
             if field['type'] in ['DecimalField']:
-                route_data[field_name] = float(value)
+                route_data[field_name] = 0.0
             elif field['type'] in ['PositiveIntegerField', 'IntegerField']:
-                route_data[field_name] = int(value)
+                route_data[field_name] = 0
             else:
-                route_data[field_name] = value
+                route_data[field_name] = ''
     
     return TouristRoute(**route_data)
 
@@ -137,7 +154,7 @@ def save_routes_to_xml():
         save_routes_to_xml()
 
 def load_routes_from_xml():
-    """Автоматическая загрузка маршрутов из XML"""
+    """Автоматическая загрузка маршрутов из XML с строгой проверкой полей"""
     ensure_xml_file_exists()
     
     try:
@@ -147,29 +164,114 @@ def load_routes_from_xml():
         # Очищаем текущие данные
         TouristRoute.objects.all().delete()
         
+        # Получаем информацию о полях модели
+        model_fields = get_model_fields()
+        required_fields = [field['name'] for field in model_fields if field['required']]
+        
+        loaded_count = 0
+        error_messages = []
+        
         # Загружаем маршруты из XML
-        for route_elem in root.findall('route'):
+        for i, route_elem in enumerate(root.findall('route'), 1):
             route_data = {}
-            fields = get_model_fields()
+            missing_required_fields = []
+            invalid_fields = []
             
-            for field in fields:
-                field_name = field['name']
+            # Проверяем наличие и валидность обязательных полей в XML
+            for field_name in required_fields:
                 elem = route_elem.find(field_name)
-                if elem is not None and elem.text:
-                    route_data[field_name] = elem.text
-            
-            # Создаем маршрут если есть обязательные поля
-            required_fields = [field['name'] for field in fields if field['required']]
-            if all(field in route_data for field in required_fields):
-                try:
-                    route = auto_create_route(route_data)
-                    route.save()
-                except (ValueError, TypeError) as e:
-                    print(f"Ошибка создания маршрута: {e}")
-                    continue
+                if elem is None:
+                    missing_required_fields.append(field_name)
+                elif not elem.text or not elem.text.strip():
+                    missing_required_fields.append(field_name)
+                else:
+                    # Проверяем валидность данных
+                    value = elem.text.strip()
+                    field_config = next((f for f in model_fields if f['name'] == field_name), None)
                     
-    except ET.ParseError:
+                    if field_config:
+                        if field_config['type'] in ['DecimalField']:
+                            try:
+                                float(value)
+                            except (ValueError, TypeError):
+                                invalid_fields.append(f"{field_name} (должно быть числом)")
+                        elif field_config['type'] in ['PositiveIntegerField', 'IntegerField']:
+                            try:
+                                int(value)
+                                if int(value) <= 0:
+                                    invalid_fields.append(f"{field_name} (должно быть положительным числом)")
+                            except (ValueError, TypeError):
+                                invalid_fields.append(f"{field_name} (должно быть целым числом)")
+                    
+                    route_data[field_name] = value
+            
+            # Если отсутствуют обязательные поля или есть невалидные данные - ошибка
+            if missing_required_fields:
+                error_messages.append(f"Маршрут #{i}: отсутствуют обязательные поля: {', '.join(missing_required_fields)}")
+                continue
+            
+            if invalid_fields:
+                error_messages.append(f"Маршрут #{i}: невалидные данные в полях: {', '.join(invalid_fields)}")
+                continue
+            
+            # Загружаем необязательные поля если они есть в XML
+            for field in model_fields:
+                field_name = field['name']
+                if field_name not in route_data:  # Если поле еще не загружено (необязательное)
+                    elem = route_elem.find(field_name)
+                    if elem is not None and elem.text is not None:
+                        value = elem.text.strip()
+                        # Проверяем валидность необязательных полей
+                        if value:
+                            if field['type'] in ['DecimalField']:
+                                try:
+                                    float(value)
+                                    route_data[field_name] = value
+                                except (ValueError, TypeError):
+                                    error_messages.append(f"Маршрут #{i}: поле '{field_name}' должно быть числом")
+                                    continue
+                            elif field['type'] in ['PositiveIntegerField', 'IntegerField']:
+                                try:
+                                    int_value = int(value)
+                                    if int_value < 0:
+                                        error_messages.append(f"Маршрут #{i}: поле '{field_name}' не может быть отрицательным")
+                                        continue
+                                    route_data[field_name] = value
+                                except (ValueError, TypeError):
+                                    error_messages.append(f"Маршрут #{i}: поле '{field_name}' должно быть целым числом")
+                                    continue
+                            else:
+                                route_data[field_name] = value
+                    else:
+                        # Устанавливаем значения по умолчанию для отсутствующих необязательных полей
+                        if field['type'] in ['DecimalField']:
+                            route_data[field_name] = '0'
+                        elif field['type'] in ['PositiveIntegerField', 'IntegerField']:
+                            route_data[field_name] = '0'
+                        else:
+                            route_data[field_name] = ''
+            
+            try:
+                # Создаем маршрут
+                route = auto_create_route(route_data)
+                route.save()
+                loaded_count += 1
+                
+            except (ValueError, TypeError) as e:
+                error_messages.append(f"Маршрут #{i}: ошибка создания - {str(e)}")
+                continue
+        
+        # Если есть ошибки - выбрасываем исключение
+        if error_messages:
+            raise ValueError(f"Ошибки загрузки:\n" + "\n".join(error_messages))
+        
+        print(f"Успешно загружено: {loaded_count} маршрутов")
+        return loaded_count
+                    
+    except ET.ParseError as e:
+        print(f"Ошибка парсинга XML: {e}")
         ensure_xml_file_exists()
+        raise
 
 def index(request):
     return render(request, 'routes_app/index.html')
@@ -223,21 +325,90 @@ def upload_xml(request):
         try:
             file_content = uploaded_file.read().decode('utf-8')
             
-            # Проверяем что это валидный XML
-            ET.fromstring(file_content)
+            # Пробуем распарсить XML
+            try:
+                tree = ET.fromstring(file_content)
+            except ET.ParseError as e:
+                messages.error(request, f'Ошибка в XML файле: {str(e)}')
+                return redirect('upload_xml')
+            
+            # Проверяем базовую структуру XML
+            routes = tree.findall('route')
+            if not routes:
+                # Пробуем альтернативные теги
+                routes = tree.findall('.//route') or tree.findall('tourist_route') or tree.findall('.//tourist_route')
+            
+            if not routes:
+                messages.error(request, 
+                    'В XML файле не найдены маршруты. Ожидаются теги: <route> или <tourist_route>'
+                )
+                return redirect('upload_xml')
+            
+            # Строгая проверка первого маршрута на наличие ВСЕХ обязательных полей
+            model_fields = get_model_fields()
+            required_fields = [field['name'] for field in model_fields if field['required']]
+            
+            first_route = routes[0]
+            missing_fields = []
+            
+            for field_name in required_fields:
+                elem = first_route.find(field_name)
+                if elem is None or not elem.text or not elem.text.strip():
+                    missing_fields.append(field_name)
+            
+            if missing_fields:
+                messages.error(request, 
+                    f'В XML файле отсутствуют обязательные поля: {", ".join(missing_fields)}. '
+                    f'Загрузка прервана.'
+                )
+                return redirect('upload_xml')
+            
+            # Проверяем валидность данных в первом маршруте
+            validation_errors = []
+            for field_name in required_fields:
+                elem = first_route.find(field_name)
+                value = elem.text.strip()
+                field_config = next((f for f in model_fields if f['name'] == field_name), None)
+                
+                if field_config:
+                    if field_config['type'] in ['DecimalField']:
+                        try:
+                            float_value = float(value)
+                            if float_value <= 0:
+                                validation_errors.append(f"{field_name} должно быть положительным числом")
+                        except (ValueError, TypeError):
+                            validation_errors.append(f"{field_name} должно быть числом")
+                    
+                    elif field_config['type'] in ['PositiveIntegerField', 'IntegerField']:
+                        try:
+                            int_value = int(value)
+                            if int_value <= 0:
+                                validation_errors.append(f"{field_name} должно быть положительным целым числом")
+                        except (ValueError, TypeError):
+                            validation_errors.append(f"{field_name} должно быть целым числом")
+            
+            if validation_errors:
+                messages.error(request, 
+                    f'Обнаружены ошибки в данных: {", ".join(validation_errors)}. '
+                    f'Загрузка прервана.'
+                )
+                return redirect('upload_xml')
             
             # Сохраняем новый файл
             with open(XML_FILE_PATH, 'w', encoding='utf-8') as f:
                 f.write(file_content)
             
-            # Загружаем данные из XML
-            load_routes_from_xml()
-            
-            messages.success(request, 'XML файл успешно загружен!')
-            return redirect('routes_list')
+            # Загружаем данные из XML с строгой проверкой
+            try:
+                loaded_count = load_routes_from_xml()
+                messages.success(request, f'XML файл успешно загружен! Загружено {loaded_count} маршрутов.')
+            except ValueError as e:
+                # Откатываем изменения - удаляем файл если загрузка не удалась
+                if os.path.exists(XML_FILE_PATH):
+                    os.remove(XML_FILE_PATH)
+                ensure_xml_file_exists()
+                messages.error(request, str(e))
                 
-        except ET.ParseError as e:
-            messages.error(request, f'Ошибка в XML файле: {str(e)}')
         except Exception as e:
             messages.error(request, f'Ошибка загрузки: {str(e)}')
     
@@ -288,3 +459,96 @@ def download_xml(request):
     response['Content-Type'] = 'application/xml'
     response['Content-Disposition'] = f'attachment; filename="tourist_routes_{datetime.now().strftime("%Y%m%d")}.xml"'
     return response
+
+def validate_xml_structure(xml_content):
+    """Проверяет структуру XML файла перед загрузкой"""
+    try:
+        root = ET.fromstring(xml_content)
+        
+        # Получаем информацию о полях модели
+        model_fields = get_model_fields()
+        required_fields = [field['name'] for field in model_fields if field['required']]
+        
+        # Ищем маршруты
+        routes = root.findall('route') or root.findall('.//route')
+        
+        if not routes:
+            return False, "В XML не найдены маршруты (тег <route>)"
+        
+        # Проверяем первый маршрут на наличие обязательных полей
+        first_route = routes[0]
+        missing_fields = []
+        
+        for field_name in required_fields:
+            if first_route.find(field_name) is None:
+                missing_fields.append(field_name)
+        
+        if missing_fields:
+            return False, f"Отсутствуют обязательные поля: {', '.join(missing_fields)}"
+        
+        return True, "XML структура корректна"
+        
+    except ET.ParseError as e:
+        return False, f"Ошибка парсинга XML: {str(e)}"
+    
+    
+def validate_xml_before_upload(xml_content):
+    """Строгая проверка XML файла перед загрузкой"""
+    try:
+        root = ET.fromstring(xml_content)
+        
+        # Получаем информацию о полях модели
+        model_fields = get_model_fields()
+        required_fields = [field['name'] for field in model_fields if field['required']]
+        
+        # Ищем маршруты
+        routes = root.findall('route') or root.findall('.//route')
+        
+        if not routes:
+            return False, "В XML не найдены маршруты (тег <route>)"
+        
+        errors = []
+        
+        # Проверяем каждый маршрут
+        for i, route in enumerate(routes, 1):
+            route_errors = []
+            
+            # Проверяем обязательные поля
+            for field_name in required_fields:
+                elem = route.find(field_name)
+                if elem is None:
+                    route_errors.append(f"отсутствует поле '{field_name}'")
+                elif not elem.text or not elem.text.strip():
+                    route_errors.append(f"поле '{field_name}' пустое")
+                else:
+                    # Проверяем валидность данных
+                    value = elem.text.strip()
+                    field_config = next((f for f in model_fields if f['name'] == field_name), None)
+                    
+                    if field_config:
+                        if field_config['type'] in ['DecimalField']:
+                            try:
+                                float_value = float(value)
+                                if float_value <= 0:
+                                    route_errors.append(f"поле '{field_name}' должно быть положительным числом")
+                            except (ValueError, TypeError):
+                                route_errors.append(f"поле '{field_name}' должно быть числом")
+                        
+                        elif field_config['type'] in ['PositiveIntegerField', 'IntegerField']:
+                            try:
+                                int_value = int(value)
+                                if int_value <= 0:
+                                    route_errors.append(f"поле '{field_name}' должно быть положительным целым числом")
+                            except (ValueError, TypeError):
+                                route_errors.append(f"поле '{field_name}' должно быть целым числом")
+            
+            if route_errors:
+                errors.append(f"Маршрут #{i}: {', '.join(route_errors)}")
+        
+        if errors:
+            return False, "Обнаружены ошибки:\n" + "\n".join(errors)
+        
+        return True, f"XML файл корректен. Найдено {len(routes)} маршрутов."
+        
+    except ET.ParseError as e:
+        return False, f"Ошибка парсинга XML: {str(e)}"

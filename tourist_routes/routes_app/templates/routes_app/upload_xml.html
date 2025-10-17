@@ -2,7 +2,6 @@
 
 {% block content %}
 <h1>Загрузка XML файла с маршрутами</h1>
-<p>Загруженный XML файл заменит текущие данные</p>
 
 <form method="post" enctype="multipart/form-data">
     {% csrf_token %}
@@ -12,43 +11,44 @@
         <input type="file" id="xml_file" name="xml_file" accept=".xml" required>
     </div>
     
-    <button type="submit">Загрузить и заменить данные</button>
+    <button type="submit">Загрузить XML файл</button>
 </form>
 
-<h3>Поддерживаемые структуры XML:</h3>
-
-<div style="display: flex; gap: 20px; flex-wrap: wrap;">
-    <div style="flex: 1; min-width: 300px;">
-        <h4>Стандартная структура:</h4>
-        <pre>
+<div class="requirements" style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin-top: 20px;">
+    <h3>Требования к XML файлу:</h3>
+    
+    <h4>Загрузка будет ОТКЛОНЕНА если:</h4>
+    <ul style="color: #dc3545;">
+        <li>Отсутствует любой из обязательных полей</li>
+        <li>Обязательные поля пустые</li>
+        <li>Числовые поля содержат нечисловые значения</li>
+        <li>Числовые поля содержат отрицательные значения</li>
+    </ul>
+    
+    <h4>Обязательные поля (должны быть в каждом маршруте):</h4>
+    <ul>
+        <li><strong>&lt;name&gt;</strong> - Название маршрута</li>
+        <li><strong>&lt;description&gt;</strong> - Описание</li>
+        <li><strong>&lt;length_km&gt;</strong> - Протяженность в км (положительное число)</li>
+        <li><strong>&lt;duration_days&gt;</strong> - Продолжительность в днях (целое положительное число)</li>
+        <li><strong>&lt;difficulty&gt;</strong> - Сложность (легкий/средний/сложный)</li>
+        <li><strong>&lt;region&gt;</strong> - Регион</li>
+    </ul>
+    
+    <h4>Пример корректного XML:</h4>
+    <pre style="background: white; padding: 10px; border: 1px solid #ddd;">
+&lt;?xml version='1.0' encoding='utf-8'?&gt;
 &lt;tourist_routes&gt;
     &lt;route&gt;
-        &lt;name&gt;Название&lt;/name&gt;
-        &lt;description&gt;Описание&lt;/description&gt;
+        &lt;name&gt;Поход на Эльбрус&lt;/name&gt;
+        &lt;description&gt;Восхождение на высочайшую вершину России&lt;/description&gt;
         &lt;length_km&gt;42.5&lt;/length_km&gt;
         &lt;duration_days&gt;7&lt;/duration_days&gt;
         &lt;difficulty&gt;сложный&lt;/difficulty&gt;
-        &lt;region&gt;Регион&lt;/region&gt;
+        &lt;region&gt;Кабардино-Балкария&lt;/region&gt;
         &lt;best_season&gt;июль-август&lt;/best_season&gt;
+        &lt;kolvo_chel&gt;10&lt;/kolvo_chel&gt;
     &lt;/route&gt;
-&lt;/tourist_routes&gt;
-        </pre>
-    </div>
-    
-    <div style="flex: 1; min-width: 300px;">
-        <h4>Альтернативная структура:</h4>
-        <pre>
-&lt;routes&gt;
-    &lt;tourist_route&gt;
-        &lt;title&gt;Название&lt;/title&gt;
-        &lt;desc&gt;Описание&lt;/desc&gt;
-        &lt;distance&gt;42.5&lt;/distance&gt;
-        &lt;days&gt;7&lt;/days&gt;
-        &lt;complexity&gt;сложный&lt;/complexity&gt;
-        &lt;location&gt;Регион&lt;/location&gt;
-    &lt;/tourist_route&gt;
-&lt;/routes&gt;
-        </pre>
-    </div>
+&lt;/tourist_routes&gt;</pre>
 </div>
 {% endblock %}
