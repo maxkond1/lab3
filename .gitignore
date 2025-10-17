@@ -1,0 +1,40 @@
+# Виртуальные окружения Python
+venv/
+env/
+.venv/
+
+# Кеш Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Редакторы и IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Файлы окружения и секреты
+.env
+.secrets
+config.ini
+
+# Логи и базы данных
+*.log
+*.sqlite3
+*.db
+
+# Временные файлы
+tmp/
+temp/
+
+# Pip файлы
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Дистрибутивы и установочные файлы
+dist/
+build/
+*.egg-info/
