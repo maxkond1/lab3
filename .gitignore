@@ -18,6 +18,8 @@ __pycache__/
 
 # Файлы окружения и секреты
 .env
+.env.local
+.env.*.local
 .secrets
 config.ini
 
@@ -25,6 +27,7 @@ config.ini
 *.log
 *.sqlite3
 *.db
+db.sqlite3
 
 # Временные файлы
 tmp/
@@ -38,3 +41,25 @@ pip-delete-this-directory.txt
 dist/
 build/
 *.egg-info/
+
+# Docker
+docker-compose.override.yml
+.dockerignore
+
+# Django
+/staticfiles/
+/media/
+local_settings.py
+
+# IDE Settings
+.DS_Store
+Thumbs.db
+
+# Test coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Database backups
+*.backup.*
+*.dump

@@ -6,37 +6,60 @@
 <form method="post">
     {% csrf_token %}
     
-    {% for field in model_fields %}
     <div>
-        <label for="{{ field.name }}">
-            {{ field.verbose_name }}{% if field.required %}*{% endif %}:
-        </label>
-        
-        {% if field.choices %}
-        {# Поле с выбором из списка #}
-        <select id="{{ field.name }}" name="{{ field.name }}" {% if field.required %}required{% endif %}>
-            <option value="">-- Выберите --</option>
-            {% for value, label in field.choices %}
-            <option value="{{ value }}" {% if form_data.field.name == value %}selected{% endif %}>
+        <label for="name">Название маршрута:*</label>
+        <input type="text" id="name" name="name" value="{{ form_data.name|default:'' }}" required maxlength="200">
+    </div>
+    
+    <div>
+        <label for="description">Описание:*</label>
+        <textarea id="description" name="description" rows="4" required>{{ form_data.description|default:'' }}</textarea>
+    </div>
+    
+    <div>
+        <label for="length_km">Протяженность (км):*</label>
+        <input type="number" id="length_km" name="length_km" step="0.01" min="0.01" value="{{ form_data.length_km|default:'' }}" required>
+    </div>
+    
+    <div>
+        <label for="duration_days">Продолжительность (дней):*</label>
+        <input type="number" id="duration_days" name="duration_days" min="1" value="{{ form_data.duration_days|default:'' }}" required>
+    </div>
+    
+    <div>
+        <label for="difficulty">Сложность:*</label>
+        <select id="difficulty" name="difficulty" required>
+            <option value="">-- Выберите сложность --</option>
+            {% for value, label in difficulty_choices %}
+            <option value="{{ value }}" {% if form_data.difficulty == value %}selected{% endif %}>
                 {{ label }}
             </option>
             {% endfor %}
         </select>
-        
-        {% elif field.type == 'TextField' %}
-        {# Большое текстовое поле #}
-        <textarea id="{{ field.name }}" name="{{ field.name }}" rows="4" 
-                  {% if field.required %}required{% endif %}>{{ form_data.field.name|default:'' }}</textarea>
-        
-        {% else %}
-        {# Стандартное текстовое поле #}
-        <input type="text" id="{{ field.name }}" name="{{ field.name }}" 
-               value="{{ form_data.field.name|default:'' }}" 
-               {% if field.required %}required{% endif %}
-               {% if field.max_length %}maxlength="{{ field.max_length }}"{% endif %}>
-        {% endif %}
     </div>
-    {% endfor %}
+    
+    <div>
+        <label for="region">Регион:*</label>
+        <input type="text" id="region" name="region" value="{{ form_data.region|default:'' }}" required maxlength="100">
+    </div>
+    
+    <div>
+        <label for="best_season">Лучшее время для похода:</label>
+        <input type="text" id="best_season" name="best_season" value="{{ form_data.best_season|default:'' }}" maxlength="100">
+    </div>
+    
+    <div>
+        <label for="kolvo_chel">Количество человек:</label>
+        <input type="number" id="kolvo_chel" name="kolvo_chel" step="0.01" min="0" value="{{ form_data.kolvo_chel|default:0 }}">
+    </div>
+    
+    <div>
+        <label for="save_to">Сохранить в:*</label>
+        <select id="save_to" name="save_to" required>
+            <option value="db">Базу данных</option>
+            <option value="xml">XML файл</option>
+        </select>
+    </div>
     
     <button type="submit">Сохранить маршрут</button>
 </form>

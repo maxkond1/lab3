@@ -1,0 +1,13 @@
+{% extends 'routes_app/base.html' %}
+
+{% block content %}
+<h1>Подтверждение удаления</h1>
+
+<p>Вы уверены, что хотите удалить маршрут <strong>"{{ route.name }}"</strong>?</p>
+
+<form method="post">
+    {% csrf_token %}
+    <button type="submit" style="background: #dc3545;">Да, удалить</button>
+    <a href="{% url 'routes_list' %}" style="margin-left: 10px;">Отмена</a>
+</form>
+{% endblock %}

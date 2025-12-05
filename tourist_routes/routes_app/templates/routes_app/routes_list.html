@@ -1,49 +1,244 @@
 {% extends 'routes_app/base.html' %}
 
 {% block content %}
-<h1>Сохраненные туристические маршруты</h1>
+<h1>Туристические маршруты</h1>
 
-{% if routes %}
-<table>
-    <thead>
-        <tr>
-            <th>Название</th>
-            <th>Регион</th>
-            <th>Протяженность (км)</th>
-            <th>Продолжительность (дней)</th>
-            <th>Сложность</th>
-            <th>Лучшее время</th>
-            <th>Дата создания</th>
-            <th>Кол-во человек</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for route in routes %}
-        <tr>
-            <td>{{ route.name }}</td>
-            <td>{{ route.region }}</td>
-            <td>{{ route.length_km }}</td>
-            <td>{{ route.duration_days }}</td>
-            <td>{{ route.get_difficulty_display }}</td>
-            <td>{{ route.best_season }}</td>
-            <td>{{ route.created_at|date:"d.m.Y H:i" }}</td>
-            <td>{{ route.kolvo_chel }}</td>
-            <td>
-                <a href="{% url 'delete_route' route.id %}" 
-                   onclick="return confirm('Удалить маршрут \"{{ route.name }}\"?')">Удалить</a>
-            </td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
-{% else %}
-<p>Нет сохраненных маршрутов.</p>
+<!-- Переключение источника данных -->
+<div style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 5px;">
+    <form method="get" style="display: flex; gap: 15px; align-items: center;">
+        <label>
+            <strong>Источник данных:</strong>
+            <select name="source" onchange="this.form.submit()">
+                <option value="db" {% if source == 'db' %}selected{% endif %}>База данных</option>
+                <option value="xml" {% if source == 'xml' %}selected{% endif %}>XML файл</option>
+            </select>
+        </label>
+        
+        {% if source == 'db' %}
+        <label>
+            <strong>Обычный поиск:</strong>
+            <input type="text" name="search" value="{{ search_query }}" placeholder="Поиск по названию, описанию..." style="margin-left: 10px;">
+            <button type="submit">Найти</button>
+        </label>
+        {% elif source == 'xml' %}
+        <label>
+            <strong>Поиск в XML:</strong>
+            <input type="text" name="search" value="{{ search_query }}" placeholder="Поиск по названию, описанию..." style="margin-left: 10px;">
+            <button type="submit">Найти</button>
+        </label>
+        {% endif %}
+    </form>
+</div>
+
+<!-- AJAX поиск (только для БД) -->
+{% if source == 'db' %}
+<div style="margin-bottom: 30px; padding: 20px; background: #e9f7fe; border-radius: 8px; border: 1px solid #b3e0ff;">
+    <h3 style="margin-top: 0; color: #0066cc;">🔍 AJAX Поиск (живой поиск)</h3>
+    <div style="display: flex; gap: 10px; align-items: center;">
+        <input type="text" id="ajax-search" placeholder="Начните вводить название, регион, описание..." 
+               style="flex: 1; padding: 12px; border: 2px solid #007bff; border-radius: 6px; font-size: 16px;">
+        <div id="search-status" style="color: #666; font-size: 14px;"></div>
+    </div>
+    
+    <!-- Результаты AJAX поиска -->
+    <div id="ajax-results" style="margin-top: 15px; display: none;">
+        <div id="search-results" style="border: 1px solid #ddd; border-radius: 6px; background: white; max-height: 400px; overflow-y: auto;"></div>
+    </div>
+</div>
 {% endif %}
 
-{% if xml_content %}
-<h2>Содержимое XML файла</h2>
-<pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto;">
-<code>{{ xml_content }}</code>
-</pre>
+{% if source == 'db' %}
+    <!-- Отображение маршрутов из БД -->
+    {% if routes %}
+    <h3>Маршруты из базы данных ({{ routes|length }})</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Название</th>
+                <th>Регион</th>
+                <th>Протяженность (км)</th>
+                <th>Продолжительность (дней)</th>
+                <th>Сложность</th>
+                <th>Лучшее время</th>
+                <th>Количество человек</th>
+                <th>Действия</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for route in routes %}
+            <tr>
+                <td><strong>{{ route.name }}</strong></td>
+                <td>{{ route.region }}</td>
+                <td>{{ route.length_km }}</td>
+                <td>{{ route.duration_days }}</td>
+                <td>{{ route.get_difficulty_display }}</td>
+                <td>{{ route.best_season }}</td>
+                <td>{{ route.kolvo_chel }}</td>
+                <td>
+                    <a href="{% url 'edit_route' route.id %}" style="color: #007bff;">✏️ Редактировать</a> |
+                    <a href="{% url 'delete_route' route.id %}" onclick="return confirm('Удалить маршрут \"{{ route.name }}\"?')" style="color: #dc3545;">🗑️ Удалить</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div style="text-align: center; padding: 40px; color: #666;">
+        <h3>📭 Нет маршрутов в базе данных</h3>
+        <p>Добавьте первый маршрут через форму добавления</p>
+    </div>
+    {% endif %}
+
+{% else %}
+    <!-- Отображение маршрутов из XML -->
+    {% if xml_routes %}
+    <h3>Маршруты из XML файла ({{ xml_routes|length }})</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Название</th>
+                <th>Регион</th>
+                <th>Протяженность (км)</th>
+                <th>Продолжительность (дней)</th>
+                <th>Сложность</th>
+                <th>Лучшее время</th>
+                <th>Количество человек</th>
+                <th>Дата создания</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for route in xml_routes %}
+            <tr>
+                <td><strong>{{ route.name }}</strong></td>
+                <td>{{ route.region }}</td>
+                <td>{{ route.length_km }}</td>
+                <td>{{ route.duration_days }}</td>
+                <td>{{ route.difficulty }}</td>
+                <td>{{ route.best_season }}</td>
+                <td>{{ route.kolvo_chel }}</td>
+                <td>{{ route.created_at|slice:":10" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div style="text-align: center; padding: 40px; color: #666;">
+        <h3>📭 Нет маршрутов в XML файле</h3>
+        <p>Добавьте маршруты через форму добавления или загрузите XML файл</p>
+    </div>
+    {% endif %}
+{% endif %}
+
+<!-- AJAX поиск JavaScript -->
+{% if source == 'db' %}
+<script>
+let searchTimeout;
+
+document.getElementById('ajax-search').addEventListener('input', function() {
+    const query = this.value.trim();
+    const statusElement = document.getElementById('search-status');
+    const resultsContainer = document.getElementById('search-results');
+    const ajaxResults = document.getElementById('ajax-results');
+    
+    // Очищаем предыдущий таймер
+    clearTimeout(searchTimeout);
+    
+    if (query.length === 0) {
+        statusElement.textContent = '';
+        ajaxResults.style.display = 'none';
+        return;
+    }
+    
+    if (query.length < 2) {
+        statusElement.textContent = 'Введите минимум 2 символа';
+        ajaxResults.style.display = 'none';
+        return;
+    }
+    
+    statusElement.textContent = '⌛ Поиск...';
+    ajaxResults.style.display = 'block';
+    resultsContainer.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">⌛ Поиск...</div>';
+    
+    // Задержка перед отправкой запроса (дебаунс)
+    searchTimeout = setTimeout(() => {
+        fetch(`{% url 'ajax_search' %}?q=${encodeURIComponent(query)}`, {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.error) {
+                statusElement.textContent = '❌ Ошибка поиска';
+                resultsContainer.innerHTML = `<div style="padding: 20px; text-align: center; color: #dc3545;">Ошибка: ${data.error}</div>`;
+                return;
+            }
+            
+            statusElement.textContent = `✅ Найдено: ${data.count} маршрутов`;
+            
+            if (data.results.length > 0) {
+                resultsContainer.innerHTML = data.results.map(route => `
+                    <div style="padding: 15px; border-bottom: 1px solid #eee; cursor: pointer; transition: background 0.2s;" 
+                         onmouseover="this.style.background='#f8f9fa'" 
+                         onmouseout="this.style.background='white'"
+                         onclick="window.location.href='{% url 'routes_list' %}?source=db&search=${encodeURIComponent(route.name)}'">
+                        <div style="display: flex; justify-content: between; align-items: start;">
+                            <div style="flex: 1;">
+                                <strong style="color: #007bff; font-size: 16px;">${route.name}</strong>
+                                <div style="color: #28a745; font-size: 14px; margin-top: 5px;">📍 ${route.region}</div>
+                                <div style="color: #666; font-size: 13px; margin-top: 5px;">${route.description}</div>
+                                <div style="margin-top: 8px; font-size: 12px; color: #888;">
+                                    📏 ${route.length_km} км | ⏱️ ${route.duration_days} дней | 🏔️ ${route.difficulty} | 🌤️ ${route.best_season}
+                                </div>
+                            </div>
+                            <div style="margin-left: 15px;">
+                                <a href="{% url 'edit_route' 0 %}".replace('0', route.id) 
+                                   style="color: #007bff; text-decoration: none; font-size: 12px;">✏️</a>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                resultsContainer.innerHTML = `
+                    <div style="padding: 30px; text-align: center; color: #666;">
+                        <div style="font-size: 48px; margin-bottom: 10px;">🔍</div>
+                        <h4>Ничего не найдено</h4>
+                        <p>Попробуйте изменить запрос</p>
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            statusElement.textContent = '❌ Ошибка соединения';
+            resultsContainer.innerHTML = '<div style="padding: 20px; text-align: center; color: #dc3545;">Ошибка соединения с сервером</div>';
+        });
+    }, 300); // Задержка 300ms
+});
+
+// Скрываем результаты при клике вне поиска
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('#ajax-search') && !e.target.closest('#ajax-results')) {
+        document.getElementById('ajax-results').style.display = 'none';
+        document.getElementById('search-status').textContent = '';
+    }
+});
+
+// Фокус на поле поиска при нажатии Ctrl+K
+document.addEventListener('keydown', function(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        document.getElementById('ajax-search').focus();
+    }
+});
+
+// Подсказка про горячую клавишу
+document.getElementById('ajax-search').placeholder = "Начните вводить название, регион, описание... ";
+</script>
 {% endif %}
 {% endblock %}
