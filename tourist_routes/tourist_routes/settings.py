@@ -27,10 +27,23 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-#n4oi-6vg$+fr=zrh(1^7-apern3r2t%f#jhhj(c$t#d1a2czk')
-
-# SECURITY WARNING: don't run with debug turned on in production!
+# Read DEBUG first so we can decide how to handle missing SECRET_KEY
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
+
+# SECRET_KEY must come from environment in production. In DEBUG mode we
+# generate a temporary key if none is provided to avoid blocking local dev.
+SECRET_KEY = os.getenv('SECRET_KEY')
+if not SECRET_KEY:
+    if DEBUG:
+        try:
+            from django.core.management.utils import get_random_secret_key
+            SECRET_KEY = get_random_secret_key()
+        except Exception:
+            # Fallback insecure key for extremely broken environments —
+            # only used if get_random_secret_key is unavailable.
+            SECRET_KEY = 'insecure-default-for-dev-only'
+    else:
+        raise RuntimeError('The SECRET_KEY environment variable is not set.')
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,0.0.0.0').split(',')
 
