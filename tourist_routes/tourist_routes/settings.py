@@ -11,13 +11,23 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 import os
 from pathlib import Path
-
-# Load environment variables from .env file (optional)
+import sys
 try:
-    from dotenv import load_dotenv
-    load_dotenv()
+    # Optional import: if `python-dotenv` isn't installed we should still
+    # allow Django to load (e.g., in minimal environments). Wrap import
+    # so `manage.py` commands don't fail with ModuleNotFoundError.
+    from dotenv import load_dotenv  # type: ignore
 except ImportError:
-    pass
+    load_dotenv = None
+
+# Load environment variables from `.env` if python-dotenv is available.
+if load_dotenv:
+    try:
+        load_dotenv()
+    except Exception:
+        # Ignore any errors reading the .env file; environment may be
+        # provided by the environment (e.g., Docker, CI).
+        pass
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -27,23 +37,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-# Read DEBUG first so we can decide how to handle missing SECRET_KEY
-DEBUG = os.getenv('DEBUG', 'False') == 'True'
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-#n4oi-6vg$+fr=zrh(1^7-apern3r2t%f#jhhj(c$t#d1a2czk')
 
-# SECRET_KEY must come from environment in production. In DEBUG mode we
-# generate a temporary key if none is provided to avoid blocking local dev.
-SECRET_KEY = os.getenv('SECRET_KEY')
-if not SECRET_KEY:
-    if DEBUG:
-        try:
-            from django.core.management.utils import get_random_secret_key
-            SECRET_KEY = get_random_secret_key()
-        except Exception:
-            # Fallback insecure key for extremely broken environments —
-            # only used if get_random_secret_key is unavailable.
-            SECRET_KEY = 'insecure-default-for-dev-only'
-    else:
-        raise RuntimeError('The SECRET_KEY environment variable is not set.')
+# SECURITY WARNING: don't run with debug turned on in production!
+DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,0.0.0.0').split(',')
 
@@ -102,7 +99,47 @@ DB_PASSWORD = os.getenv('DB_PASSWORD', '')
 DB_HOST = os.getenv('DB_HOST', '')
 DB_PORT = os.getenv('DB_PORT', '')
 
-if DB_ENGINE == 'django.db.backends.postgresql':
+
+def _is_valid_postgres_config():
+    """Return True when the minimal Postgres env vars look sane.
+
+    This tries to catch malformed or non-text values coming from a bad
+    `.env` encoding or accidental binary data. If validation fails we
+    fall back to SQLite to avoid crashing `runserver` during local
+    development.
+    """
+    try:
+        # Basic presence check
+        for v in (DB_NAME, DB_USER, DB_PASSWORD, DB_HOST):
+            if not v or not isinstance(v, str):
+                return False
+            # ensure it can be encoded to UTF-8 and contains no C0 control chars
+            v.encode('utf-8')
+            import re
+
+            if re.search(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', v):
+                return False
+        return True
+    except Exception:
+        return False
+
+
+USE_POSTGRES = os.getenv('USE_POSTGRES', 'False') == 'True'
+
+# Detect when Django is started via `runserver` so we can avoid attempting
+# to connect to an external Postgres during quick local development runs.
+IS_RUNSERVER = any('runserver' in a for a in sys.argv)
+
+# Only enable PostgreSQL when explicitly requested via USE_POSTGRES or when
+# running in non-debug (production) mode and the config looks valid. This
+# prevents accidental attempts to connect to a malformed Postgres config
+# during local development (`runserver`).
+if (
+    DB_ENGINE == 'django.db.backends.postgresql'
+    and _is_valid_postgres_config()
+    and (USE_POSTGRES or not DEBUG)
+    and (not IS_RUNSERVER or USE_POSTGRES)
+):
     DATABASES = {
         'default': {
             'ENGINE': DB_ENGINE,
@@ -116,6 +153,19 @@ if DB_ENGINE == 'django.db.backends.postgresql':
         }
     }
 else:
+    # If the environment suggests PostgreSQL but the values look invalid,
+    # fall back to the local SQLite DB for developer convenience.
+    if DB_ENGINE == 'django.db.backends.postgresql':
+        try:
+            import warnings
+
+            warnings.warn(
+                'Postgres configuration appears invalid or contains non-text values; '
+                'falling back to SQLite for local development.'
+            )
+        except Exception:
+            pass
+
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
@@ -158,13 +208,10 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/5.2/howto/static-files/
-
-STATIC_URL = '/static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATIC_URL = 'static/'
 
 MEDIA_URL = '/media/'
+
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # Default primary key field type
