@@ -1,33 +1,20 @@
-#!/bin/bash
+#!/usr/bin/env sh
 set -e
 
-# Change to the Django project directory
-cd /app
+# We expect Django project to be in /app/tourist_routes (see Dockerfile).
+cd /app/tourist_routes
 
-# Wait for PostgreSQL to be ready
-echo "Waiting for PostgreSQL to be ready..."
-while ! pg_isready -h $DB_HOST -p $DB_PORT -U $DB_USER; do
+if [ "${DB_ENGINE}" = "django.db.backends.postgresql" ] || [ -n "${DB_HOST}" ]; then
+  echo "Waiting for PostgreSQL (${DB_HOST:-db}:${DB_PORT:-5432})..."
+  until pg_isready -h "${DB_HOST:-db}" -p "${DB_PORT:-5432}" -U "${DB_USER:-postgres}" >/dev/null 2>&1; do
     sleep 1
-done
-echo "PostgreSQL is ready!"
+  done
+  echo "PostgreSQL is ready"
+fi
 
-# Run migrations
-echo "Running Django migrations..."
-python manage.py migrate
+python manage.py migrate --noinput
 
-# Collect static files
-echo "Collecting static files..."
+# Collect static files into STATIC_ROOT (mapped to a volume in docker-compose)
 python manage.py collectstatic --noinput
 
-# Create superuser if it doesn't exist (optional)
-# python manage.py shell << END
-# from django.contrib.auth import get_user_model
-# User = get_user_model()
-# if not User.objects.filter(username='admin').exists():
-#     User.objects.create_superuser('admin', 'admin@example.com', 'admin')
-# END
-
-echo "Django setup complete!"
-
-# Execute the main command
 exec "$@"

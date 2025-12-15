@@ -1,45 +1,37 @@
-# Stage 1: Base Python image
 FROM python:3.11-slim
 
-# Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# Set working directory
-WORKDIR /app
-
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    postgresql-client \
+# System deps: psycopg (libpq), healthcheck tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
+    libpq-dev \
+    postgresql-client \
+    netcat-openbsd \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first (for better layer caching)
-COPY requirements.txt .
+# Project lives in /app, Django manage.py in /app/tourist_routes
+WORKDIR /app/tourist_routes
 
-# Install Python dependencies
-RUN pip install -r requirements.txt
+COPY requirements.txt /app/requirements.txt
+RUN pip install -r /app/requirements.txt
 
-# Copy project files
-COPY tourist_routes/ .
+# Copy sources
+COPY . /app
 
-# Create directories for static and media files
-RUN mkdir -p /app/staticfiles /app/media
+# Runtime directories for collected static & uploaded media
+RUN mkdir -p /app/tourist_routes/staticfiles /app/tourist_routes/media \
+    && chmod -R 755 /app/tourist_routes/staticfiles /app/tourist_routes/media
 
-# Copy entrypoint script
-COPY entrypoint.sh /app/
-RUN chmod +x /app/entrypoint.sh
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
-# Collect static files (will be handled by entrypoint)
-# RUN python manage.py collectstatic --noinput
-
-# Expose port
 EXPOSE 8000
 
-# Run entrypoint script
-ENTRYPOINT ["/app/entrypoint.sh"]
+ENTRYPOINT ["/entrypoint.sh"]
 
-# Default command
+# NOTE: module path resolves because WORKDIR=/app/tourist_routes
 CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "4", "tourist_routes.wsgi:application"]

@@ -61,7 +61,7 @@ WEB_PORT=8000
 #### Режим разработки (Development)
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 Приложение будет доступно по адресу: `http://localhost:8000`
@@ -69,36 +69,32 @@ docker-compose up -d
 #### Проверка логов
 
 ```bash
-docker-compose logs -f web
-docker-compose logs -f db
+docker compose logs -f web
+docker compose logs -f db
 ```
 
 #### Остановка приложения
 
 ```bash
-docker-compose down
+docker compose down
 ```
 
 ## 🐋 Docker конфигурация
 
 ### Структура Docker Compose
 
-Проект использует три сервиса:
+Проект использует два сервиса (Django + PostgreSQL):
 
 ```
-┌─────────────┐
-│   nginx     │  (Reverse Proxy, Port 80/443)
-└──────┬──────┘
+┌──────────────┐
+│    Django    │  (Gunicorn, Port 8000)
+│     (web)    │
+└──────┬───────┘
        │
-┌──────▼──────┐
-│   Django    │  (Web Application, Port 8000)
-│   (web)     │
-└──────┬──────┘
-       │
-┌──────▼──────┐
-│ PostgreSQL  │  (Database, Port 5432)
-│    (db)     │
-└─────────────┘
+┌──────▼───────┐
+│  PostgreSQL   │  (Port 5432 внутри сети docker)
+│     (db)      │
+└──────────────┘
 ```
 
 ### Volumes (Хранилища)
@@ -106,12 +102,10 @@ docker-compose down
 | Том | Путь | Назначение |
 |-----|------|-----------|
 | `postgres_data` | `/var/lib/postgresql/data` | Данные PostgreSQL |
-| `static_volume` | `/app/staticfiles` | Статические файлы CSS/JS |
-| `media_volume` | `/app/media` | Загруженные файлы (XML и т.д.) |
+| `static_volume` | `/app/tourist_routes/staticfiles` | Статические файлы (collectstatic) |
+| `media_volume` | `/app/tourist_routes/media` | Загруженные файлы (XML и т.д.) |
 
-### Networks (Сети)
-
-- `tourist_network`: внутренняя сеть для связи между контейнерами
+Docker Compose создаёт внутреннюю сеть автоматически.
 
 ## 📦 Миграция с SQLite на PostgreSQL
 
@@ -122,7 +116,7 @@ docker-compose down
 ```bash
 # 1. Убедитесь, что .env содержит PostgreSQL credentials
 # 2. Проверьте наличие данных в SQLite:
-docker-compose exec web python manage.py dbshell
+docker compose exec web python manage.py dbshell
 # Или локально:
 python tourist_routes/manage.py dbshell
 ```
@@ -131,7 +125,7 @@ python tourist_routes/manage.py dbshell
 
 ```bash
 # Запустите контейнеры (они автоматически применят миграции)
-docker-compose up -d
+docker compose up -d
 ```
 
 Entrypoint скрипт автоматически:
@@ -143,7 +137,7 @@ Entrypoint скрипт автоматически:
 
 ```bash
 # Проверить данные в новой БД
-docker-compose exec web python manage.py shell
+docker compose exec web python manage.py shell
 ```
 
 ```python
@@ -154,19 +148,15 @@ route = TouristRoute.objects.first()
 print(route.name, route.region, route.difficulty)
 ```
 
-### Использование скрипта миграции
+### Использование скрипта миграции (SQLite -> PostgreSQL)
 
-Для более детального контроля миграции используйте скрипт:
+В репозитории есть готовый скрипт, который:
+1) делает `dumpdata` из SQLite (монтирует `tourist_routes/db.sqlite3` внутрь контейнера),
+2) применяет миграции в PostgreSQL,
+3) делает `loaddata` в PostgreSQL.
 
 ```bash
-# Экспортировать данные SQLite в JSON (опционально)
-docker-compose exec web python scripts/migrate_sqlite_to_postgres.py --export
-
-# Создать резервную копию текущей БД
-docker-compose exec web python scripts/migrate_sqlite_to_postgres.py --backup
-
-# Запустить полную миграцию
-docker-compose exec web python scripts/migrate_sqlite_to_postgres.py
+bash scripts/migrate_sqlite_to_postgres.sh
 ```
 
 ## 💾 Работа с базой данных
@@ -175,7 +165,7 @@ docker-compose exec web python scripts/migrate_sqlite_to_postgres.py
 
 ```bash
 # Подключиться к bash контейнера
-docker-compose exec db psql -U postgres -d tourist_routes_db
+docker compose exec db psql -U postgres -d tourist_routes_db
 
 # Основные команды SQL
 \dt                      # Список таблиц
@@ -200,10 +190,10 @@ psql -h localhost -U postgres -d tourist_routes_db -p 5432
 
 ```bash
 # Создать дамп PostgreSQL
-docker-compose exec db pg_dump -U postgres -d tourist_routes_db > backup_$(date +%Y%m%d_%H%M%S).sql
+docker compose exec db pg_dump -U postgres -d tourist_routes_db > backup_$(date +%Y%m%d_%H%M%S).sql
 
 # Восстановить из дампа
-docker-compose exec -T db psql -U postgres -d tourist_routes_db < backup_20240101_120000.sql
+docker compose exec -T db psql -U postgres -d tourist_routes_db < backup_20240101_120000.sql
 ```
 
 ## 🛠️ Локальная разработка (без Docker)
@@ -294,12 +284,9 @@ lab3/
 ├── .gitignore                      # Исключения для Git
 ├── requirements.txt                # Python зависимости
 ├── README.md                       # Этот файл
-├── nginx/                          # Конфигурация Nginx
-│   ├── nginx.conf                  # Основная конфигурация
-│   └── ssl/                        # SSL сертификаты
 ├── scripts/                        # Вспомогательные скрипты
-│   ├── init-db.sql                 # Инициализация БД
-│   └── migrate_sqlite_to_postgres.py  # Скрипт миграции данных
+│   ├── init-db.sql                 # (опционально) SQL инициализация
+│   └── migrate_sqlite_to_postgres.sh  # Миграция данных SQLite -> PostgreSQL
 └── tourist_routes/                 # Главная папка Django проекта
     ├── manage.py                   # Django управление
     ├── db.sqlite3                  # SQLite (для локальной разработки)
@@ -360,7 +347,7 @@ DEBUG=False  # Обязательно False в production
 
 ```bash
 # Проверить логи
-docker-compose logs web
+docker compose logs web
 
 # Возможные причины:
 # 1. PostgreSQL не готов - wait for db healthcheck
@@ -372,37 +359,37 @@ docker-compose logs web
 
 ```bash
 # Проверить статус PostgreSQL
-docker-compose ps db
+docker compose ps db
 
 # Проверить логи БД
-docker-compose logs db
+docker compose logs db
 
 # Переподключиться к БД
-docker-compose down
-docker-compose up -d
+docker compose down
+docker compose up -d
 ```
 
 ### Проблема: Статические файлы не загружаются
 
 ```bash
 # Собрать статические файлы вручную
-docker-compose exec web python manage.py collectstatic --noinput
+docker compose exec web python manage.py collectstatic --noinput
 
 # Проверить наличие файлов
-docker-compose exec web ls -la /app/staticfiles/
+docker compose exec web ls -la /app/tourist_routes/staticfiles/
 ```
 
 ### Проблема: Данные не мигрировались
 
 ```bash
 # Проверить миграции
-docker-compose exec web python manage.py showmigrations
+docker compose exec web python manage.py showmigrations
 
 # Применить миграции вручную
-docker-compose exec web python manage.py migrate
+docker compose exec web python manage.py migrate
 
 # Проверить данные в БД
-docker-compose exec web python manage.py shell
+docker compose exec web python manage.py shell
 ```
 
 ## 🌐 Production развёртывание

@@ -92,12 +92,12 @@ WSGI_APPLICATION = 'tourist_routes.wsgi.application'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 # Use PostgreSQL in production, SQLite for local development
-DB_ENGINE = os.getenv('DB_ENGINE', 'django.db.backends.sqlite3')
-DB_NAME = os.getenv('DB_NAME', str(BASE_DIR / 'db.sqlite3'))
-DB_USER = os.getenv('DB_USER', '')
-DB_PASSWORD = os.getenv('DB_PASSWORD', '')
-DB_HOST = os.getenv('DB_HOST', '')
-DB_PORT = os.getenv('DB_PORT', '')
+DB_ENGINE = os.getenv('DB_ENGINE', 'django.db.backends.postgresql')
+DB_NAME = os.getenv('DB_NAME', 'tourist_routes_db')
+DB_USER = os.getenv('DB_USER', 'postgres')
+DB_PASSWORD = os.getenv('DB_PASSWORD', 'your-secure-password-here')
+DB_HOST = os.getenv('DB_HOST', 'db')
+DB_PORT = os.getenv('DB_PORT', '5432')
 
 
 def _is_valid_postgres_config():
@@ -134,14 +134,8 @@ IS_RUNSERVER = any('runserver' in a for a in sys.argv)
 # running in non-debug (production) mode and the config looks valid. This
 # prevents accidental attempts to connect to a malformed Postgres config
 # during local development (`runserver`).
-if (
-    DB_ENGINE == 'django.db.backends.postgresql'
-    and _is_valid_postgres_config()
-    and (USE_POSTGRES or not DEBUG)
-    and (not IS_RUNSERVER or USE_POSTGRES)
-):
-    DATABASES = {
-        'default': {
+DATABASES = {
+            'default': {
             'ENGINE': DB_ENGINE,
             'NAME': DB_NAME,
             'USER': DB_USER,
@@ -150,28 +144,45 @@ if (
             'PORT': DB_PORT,
             'CONN_MAX_AGE': 600,
             'ATOMIC_REQUESTS': True,
-        }
-    }
-else:
-    # If the environment suggests PostgreSQL but the values look invalid,
-    # fall back to the local SQLite DB for developer convenience.
-    if DB_ENGINE == 'django.db.backends.postgresql':
-        try:
-            import warnings
+        }}
+# if (
+#     DB_ENGINE == 'django.db.backends.postgresql'
+#     and _is_valid_postgres_config()
+#     and (USE_POSTGRES or not DEBUG)
+#     and (not IS_RUNSERVER or USE_POSTGRES)
+# ):
+#     DATABASES = {
+#         'default': {
+#             'ENGINE': DB_ENGINE,
+#             'NAME': DB_NAME,
+#             'USER': DB_USER,
+#             'PASSWORD': DB_PASSWORD,
+#             'HOST': DB_HOST,
+#             'PORT': DB_PORT,
+#             'CONN_MAX_AGE': 600,
+#             'ATOMIC_REQUESTS': True,
+#         }
+#     }
+# else:
+#     # If the environment suggests PostgreSQL but the values look invalid,
+#     # fall back to the local SQLite DB for developer convenience.
+#     if DB_ENGINE == 'django.db.backends.postgresql':
+#         try:
+#             import warnings
 
-            warnings.warn(
-                'Postgres configuration appears invalid or contains non-text values; '
-                'falling back to SQLite for local development.'
-            )
-        except Exception:
-            pass
+#             warnings.warn(
+#                 'Postgres configuration appears invalid or contains non-text values; '
+#                 'falling back to SQLite for local development.'
+#             )
+#         except Exception:
+#             pass
 
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-        }
-    }
+#     DATABASES = {
+#         'default': {
+#             'ENGINE': 'django.db.backends.sqlite3',
+#             'NAME': BASE_DIR / 'db.sqlite3',
+#         }
+#     }
 
 
 # Password validation
@@ -208,7 +219,10 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+
+# Collected static files (for Docker/Gunicorn). Mapped to a named volume in docker-compose.
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 MEDIA_URL = '/media/'
 
